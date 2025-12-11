@@ -148,8 +148,8 @@ class SharePointMCPServer:
             print(f"Error getting folder contents: {e}")
             return [{'error': f'Failed to retrieve folder contents: {str(e)}'}]
     
-    def get_file_content(self, file_id: str, max_size: int = 5000) -> Optional[str]:
-        """Get content of a specific file with size limits"""
+    def get_file_content(self, file_id: str, max_size_kb: int = 50) -> Optional[str]:
+        """Get content of a specific file with size limits (in KB)"""
         if not self.access_token:
             if not self.get_access_token():
                 return None
@@ -169,10 +169,10 @@ class SharePointMCPServer:
             file_size = file_info.get('size', 0)
             file_name = file_info.get('name', 'unknown')
             mime_type = file_info.get('file', {}).get('mimeType', '')
-            
+
             # Check if file is too large
-            if file_size > max_size * 1024:  # max_size in KB
-                return f"File '{file_name}' is too large ({file_size} bytes). Maximum allowed size is {max_size}KB."
+            if file_size > max_size_kb * 1024:  # max_size_kb is in KB
+                return f"File '{file_name}' is too large ({file_size} bytes). Maximum allowed size is {max_size_kb}KB."
             
             # Check if file type is readable
             text_types = ['text/', 'application/json', 'application/xml', 'application/javascript', 'application/csv']
@@ -191,9 +191,10 @@ class SharePointMCPServer:
             # Try to decode as text
             try:
                 content = response.text
-                # Truncate if still too long
-                if len(content) > max_size:
-                    content = content[:max_size] + f"\n\n... (truncated, showing first {max_size} characters)"
+                # Truncate if still too long (approximate by characters vs KB)
+                max_chars = max_size_kb * 1024
+                if len(content) > max_chars:
+                    content = content[:max_chars] + f"\n\n... (truncated, showing first {max_chars} characters)"
                 return content
             except UnicodeDecodeError:
                 return f"File '{file_name}' contains binary data that cannot be displayed as text."
@@ -252,9 +253,9 @@ def get_sharepoint_file_content(file_id: str, max_size_kb: int = 5) -> Optional[
     Returns:
         The file content as text (with size limits for safety)
     """
-    # Limit max size to prevent overwhelming responses
-    max_size_kb = min(max_size_kb, 50)
-    content = sharepoint_server.get_file_content(file_id, max_size_kb * 1024)
+    # Enforce documented size limits (5–50 KB)
+    max_size_kb = max(5, min(max_size_kb, 50))
+    content = sharepoint_server.get_file_content(file_id, max_size_kb)
     return content
 
 @mcp.tool()
